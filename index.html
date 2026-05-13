@@ -695,25 +695,39 @@
       }, 1200); // Matches transition duration
     }
 
-    // ── Auto-advance after 5 s ──
-    const autoTimer = setTimeout(() => {
-      advanceToLoader(true); // Attempt to play audio even on auto-advance
-    }, GATE_DURATION);
+    // ── Global interaction unlock (Browser Autoplay Policy) ──
+    // This is the most aggressive way to "unlock" audio on mobile.
+    // It listens for ANY touch or click to start the audio engine.
+    const unlockAudio = () => {
+      if (audio.paused && gate.style.display !== 'none') {
+        audio.play().then(() => {
+          console.log("Audio unlocked successfully");
+          // Remove listeners once unlocked
+          window.removeEventListener('click', unlockAudio);
+          window.removeEventListener('touchstart', unlockAudio);
+          window.removeEventListener('touchend', unlockAudio);
+        }).catch((e) => {
+          console.warn("Audio unlock failed, waiting for stronger interaction:", e);
+        });
+        video.load(); 
+      }
+    };
+
+    window.addEventListener('click', unlockAudio, { once: true });
+    window.addEventListener('touchstart', unlockAudio, { once: true });
+    window.addEventListener('touchend', unlockAudio, { once: true });
 
     // ── Click/tap to advance early ──
     gate.addEventListener('click', () => {
       clearTimeout(autoTimer);
-      advanceToLoader(true); // try audio — user interacted
+      unlockAudio(); // Ensure audio is unlocked on this specific click
+      advanceToLoader(true);
     }, { once: true });
 
-    // ── Global interaction unlock (Browser Autoplay Policy) ──
-    // This helps unlock audio if the user clicks anywhere else before the gate closes
-    window.addEventListener('click', () => {
-      if (audio.paused && gate.style.display !== 'none') {
-        audio.play().catch(() => {});
-        video.load(); 
-      }
-    }, { once: true });
+    // ── Auto-advance after 5 s ──
+    const autoTimer = setTimeout(() => {
+      advanceToLoader(true); 
+    }, GATE_DURATION);
 
     // ── Auto-loop ──
     const panels = ['skycity', 'temerario'];
