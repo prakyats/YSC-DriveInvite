@@ -137,122 +137,70 @@
       position: fixed;
       inset: 0;
       background: #000;
+      z-index: 10000;
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      z-index: 400;
+      transition: opacity 1.2s cubic-bezier(0.4, 0, 0.2, 1), transform 1.6s cubic-bezier(0.4, 0, 0.2, 1);
       cursor: pointer;
-      transition: opacity 0.6s ease;
       user-select: none;
+      -webkit-tap-highlight-color: transparent;
     }
-
-    #gate::before {
-      content: '';
-      position: absolute;
-      inset: 0;
-      background-image: repeating-linear-gradient(
-        0deg, transparent, transparent 2px,
-        rgba(255,255,255,0.015) 2px, rgba(255,255,255,0.015) 3px
-      );
-      pointer-events: none;
-    }
-
     #gate.hide {
       opacity: 0;
+      transform: scale(1.08);
       pointer-events: none;
     }
-
     .gate-inner {
-      position: relative;
-      z-index: 1;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 0;
       text-align: center;
-      padding: 0 40px;
+      pointer-events: none;
     }
-
-    .gate-logos {
-      display: flex;
-      align-items: center;
-      gap: 20px;
-      margin-bottom: 28px;
-    }
-
-    .gate-logos img {
-      width: 44px;
-      height: 44px;
+    .gate-logo {
+      width: clamp(70px, 15vw, 90px);
+      height: auto;
       object-fit: contain;
-      opacity: 0.75;
+      opacity: 0.9;
+      margin-bottom: 44px;
+      filter: drop-shadow(0 0 20px rgba(255,255,255,0.05));
+      animation: logo-breath 4s ease-in-out infinite;
     }
-
-    .gate-x {
-      font-family: 'IBM Plex Mono', monospace;
-      font-weight: 300;
-      font-size: 18px;
-      color: rgba(255,255,255,0.3);
-      line-height: 1;
-    }
-
-    .gate-title {
-      font-family: 'Michroma', sans-serif;
-      font-size: clamp(22px, 6vw, 38px);
-      letter-spacing: 0.18em;
-      color: #fff;
-      text-transform: uppercase;
-      margin-bottom: 10px;
-    }
-
-    .gate-sub {
-      font-family: 'IBM Plex Mono', monospace;
-      font-weight: 300;
-      font-size: clamp(9px, 2.5vw, 12px);
-      letter-spacing: 0.45em;
-      color: rgba(255,255,255,0.35);
-      text-transform: uppercase;
-      margin-bottom: 52px;
-    }
-
     .gate-cta {
       font-family: 'IBM Plex Mono', monospace;
-      font-weight: 300;
-      font-size: clamp(9px, 2.2vw, 11px);
-      letter-spacing: 0.5em;
-      color: rgba(255,255,255,0.45);
+      color: rgba(255,255,255,0.5);
+      font-size: clamp(9px, 2.5vw, 11px);
+      letter-spacing: 0.6em;
       text-transform: uppercase;
-      animation: blink 2.2s ease-in-out infinite;
+      font-weight: 300;
+      animation: cta-pulse 3s ease-in-out infinite;
+      transition: color 0.4s ease;
     }
-
-    @keyframes blink {
-      0%, 100% { opacity: 0.45; }
-      50%       { opacity: 0.9; }
+    @keyframes logo-breath {
+      0%, 100% { opacity: 0.7; transform: scale(1); filter: drop-shadow(0 0 10px rgba(255,255,255,0.05)); }
+      50% { opacity: 1; transform: scale(1.03); filter: drop-shadow(0 0 25px rgba(255,255,255,0.15)); }
     }
-
-    /* Gate bottom progress bar */
+    @keyframes cta-pulse {
+      0%, 100% { opacity: 0.35; letter-spacing: 0.6em; }
+      50% { opacity: 0.85; letter-spacing: 0.65em; }
+    }
     .gate-bar {
       position: absolute;
-      bottom: 0;
-      left: 0;
-      right: 0;
-      height: 2px;
-      background: rgba(255,255,255,0.08);
+      bottom: 60px;
+      width: 140px;
+      height: 1px;
+      background: rgba(255,255,255,0.1);
+      overflow: hidden;
+      opacity: 0.5;
     }
-
     .gate-bar-fill {
+      width: 100%;
       height: 100%;
-      width: 0%;
-      background: rgba(255,255,255,0.5);
+      background: rgba(255,255,255,0.4);
+      transform: translateX(-100%);
     }
-
-    /* JS controls the animation via .running class */
     .gate-bar-fill.running {
-      animation: gateFill 5s linear forwards;
-    }
-
-    @keyframes gateFill {
-      to { width: 100%; }
+      transform: translateX(0);
+      transition: transform 3s ease-out;
     }
 
     /* ─────────────────────────────
@@ -533,7 +481,7 @@
   <!-- ── GATE SCREEN ── -->
   <div id="gate">
     <div class="gate-inner">
-      <img src="/assets/5ed97536-2789-41fb-9f75-d35ea48519ac.png" alt="Sky City" style="width:72px;height:72px;object-fit:contain;opacity:0.9;margin-bottom:36px;">
+      <img src="/assets/5ed97536-2789-41fb-9f75-d35ea48519ac.png" alt="Sky City" class="gate-logo">
       <p class="gate-cta">Tap to Begin</p>
     </div>
     <div class="gate-bar">
@@ -593,7 +541,6 @@
   </div>
 
   <script>
-    const GATE_DURATION   = 5000;
     const LOADER_DURATION = 5000;
     const FADE            = 800;
 
@@ -606,13 +553,50 @@
     const audio      = document.getElementById('intro-audio');
     const barFill    = document.getElementById('gateBarFill');
 
-    // ── Start gate progress bar ──
+    // ── Pre-Interaction State ──
     requestAnimationFrame(() => {
       barFill.classList.add('running');
     });
 
-    // ── Advance to loader (with or without audio) ──
-    function advanceToLoader(withAudio) {
+    // ── Cinematic Engine ──
+    let audioCtx = null;
+    let source = null;
+
+    const startExperience = () => {
+      if (gate.classList.contains('hide')) return;
+      
+      // Initialize Audio Context (Standard Bypass)
+      if (!audioCtx) {
+        try {
+          const AudioContext = window.AudioContext || window.webkitAudioContext;
+          audioCtx = new AudioContext();
+          source = audioCtx.createMediaElementSource(audio);
+          source.connect(audioCtx.destination);
+        } catch (e) {}
+      }
+      
+      if (audioCtx && audioCtx.state === 'suspended') {
+        audioCtx.resume();
+      }
+
+      // Unlock & Play Audio
+      audio.muted = false;
+      audio.volume = 1.0;
+      audio.play().catch(() => {});
+
+      // Begin Cinematic Progression
+      advanceToLoader();
+    };
+
+    // Full-screen click area
+    gate.addEventListener('click', startExperience, { once: true });
+    gate.addEventListener('touchstart', (e) => {
+      if (!gate.classList.contains('hide')) {
+        startExperience();
+      }
+    }, { once: true, passive: true });
+
+    function advanceToLoader() {
       if (gate.classList.contains('hide')) return; 
       gate.classList.add('hide');
       
@@ -621,13 +605,6 @@
       setTimeout(() => {
         gate.style.display = 'none';
         loader.classList.add('started');
-        
-        // TRUE AUTOPLAY STRATEGY:
-        // We attempt to unmute the already-playing (but muted) audio.
-        // This bypasses many mobile restrictions if the user has interacted with the device.
-        if (withAudio) {
-           unmuteAudio();
-        }
         
         setTimeout(() => {
           // Transition: Loader -> Video
@@ -652,26 +629,20 @@
             }, 100);
 
             video.play().catch(err => {
-              console.warn("Autoplay with audio blocked:", err);
-              // Fallback: try playing muted if unmuted fails
+              console.warn("Video block:", err);
               video.muted = true;
               video.play().catch(e => advanceToInvitation());
             });
           }, FADE);
         }, LOADER_DURATION);
-      }, 600);
+      }, 1200); // Cinematic transition duration
     }
 
-    // ── Video Completion Handler ──
-    video.addEventListener('ended', () => {
-      advanceToInvitation();
-    });
+    video.addEventListener('ended', () => advanceToInvitation());
 
-    // ── Transition: Video -> Invitation ──
     function advanceToInvitation() {
       trailer.classList.remove('visible');
       
-      // Resume intro audio for the final invitation view
       audio.volume = 0;
       audio.play().catch(() => {});
       const fadeInInterval = setInterval(() => {
@@ -695,121 +666,16 @@
           }));
           startLoop();
         }, 400);
-      }, 1200); // Matches transition duration
+      }, 1200);
     }
 
-    // ── Global interaction unlock (Browser Autoplay Policy) ──
-    // This is the most aggressive way to "unlock" audio on mobile.
-    // It listens for ANY touch or click to start the audio engine.
-    // ── Nuclear Cinematic Audio Engine (Production Bypass Attempt) ──
-    let audioCtx = null;
-    let source = null;
-    window.audioUnlocked = false;
-
-    const initAudioEngine = () => {
-      if (audioCtx) return;
-      try {
-        const AudioContext = window.AudioContext || window.webkitAudioContext;
-        audioCtx = new AudioContext();
-        source = audioCtx.createMediaElementSource(audio);
-        source.connect(audioCtx.destination);
-      } catch (e) {}
-    };
-
-    const attemptNuclearUnlock = () => {
-      initAudioEngine();
-      if (audioCtx && audioCtx.state === 'suspended') {
-        audioCtx.resume();
-      }
-
-      // 1. Silent Warm-up
-      try {
-        const node = audioCtx.createOscillator();
-        const gain = audioCtx.createGain();
-        gain.gain.value = 0.001; // Nearly silent but NOT zero
-        node.connect(gain);
-        gain.connect(audioCtx.destination);
-        node.start(0);
-        node.stop(0.1);
-      } catch (e) {}
-
-      // 2. Unmute + Volume Ramp
-      // Some browsers allow unmuting if the volume is very low initially
-      audio.muted = false;
-      audio.volume = 0.01; 
-      
-      audio.play().then(() => {
-        window.audioUnlocked = true;
-        // Fade in
-        let vol = 0.01;
-        const fadeIn = setInterval(() => {
-          vol += 0.05;
-          if (vol >= 1) {
-            audio.volume = 1;
-            clearInterval(fadeIn);
-          } else {
-            audio.volume = vol;
-          }
-        }, 50);
-
-        // Clean up
-        ['click', 'touchstart', 'touchend', 'scroll', 'mousedown', 'mousemove'].forEach(evt => {
-          window.removeEventListener(evt, attemptNuclearUnlock);
-        });
-      }).catch(() => {
-        // Still blocked, will retry on next loop or interaction
-      });
-    };
-
-    // PERSISTENT LOOP: Attempt to unmute every 500ms 
-    // This catches the exact millisecond the browser might "unlock" due to any system event
-    const nuclearLoop = setInterval(() => {
-      if (window.audioUnlocked) {
-        clearInterval(nuclearLoop);
-        return;
-      }
-      attemptNuclearUnlock();
-    }, 500);
-
-    // Global interaction listeners (standard backup)
-    ['click', 'touchstart', 'touchend', 'scroll', 'mousedown', 'mousemove'].forEach(evt => {
-      window.addEventListener(evt, attemptNuclearUnlock, { once: true });
-    });
-
-    const unmuteAudio = () => {
-      if (window.audioUnlocked) return;
-      attemptNuclearUnlock();
-    };
-
-    // ── Click/tap to advance early ──
-    gate.addEventListener('click', (e) => {
-      e.stopPropagation();
-      clearTimeout(autoTimer);
-      attemptNuclearUnlock();
-      advanceToLoader(true);
-    }, { once: true });
-
-    // Handle background/foreground switching
     document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'visible' && !audio.paused) {
+      if (document.visibilityState === 'visible' && !gate.classList.contains('hide') && !audio.paused) {
         audio.play().catch(() => {});
       }
     });
 
-    // ── Click/tap to advance early ──
-    gate.addEventListener('click', (e) => {
-      e.stopPropagation();
-      clearTimeout(autoTimer);
-      advanceToLoader(true);
-      unmuteAudio(); 
-    }, { once: true });
-
-    // ── Auto-advance after 5 s ──
-    const autoTimer = setTimeout(() => {
-      advanceToLoader(true); 
-    }, GATE_DURATION);
-
-    // ── Auto-loop ──
+    // ── Auto-loop Panels ──
     const panels = ['skycity', 'temerario'];
     let currentIndex = 0;
     let loopInterval = null;
@@ -825,20 +691,18 @@
     }
 
     function startLoop() {
-      clearInterval(loopInterval);
+      if (loopInterval) clearInterval(loopInterval);
       loopInterval = setInterval(() => {
         currentIndex = (currentIndex + 1) % panels.length;
         switchTo(panels[currentIndex]);
       }, 10000);
     }
 
-    // ── Toggle logic ──
     document.querySelectorAll('.toggle-btn').forEach(btn => {
       btn.addEventListener('click', () => {
-        const target = btn.dataset.target;
-        if (btn.classList.contains('active')) return;
-        switchTo(target);
-        startLoop(); // reset timer on manual switch
+        clearInterval(loopInterval);
+        switchTo(btn.dataset.target);
+        setTimeout(startLoop, 10000);
       });
     });
   </script>
