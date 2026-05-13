@@ -704,60 +704,61 @@
     // ── Resilient Cinematic Audio Engine ──
     let audioCtx = null;
     let source = null;
+    window.audioUnlocked = false;
 
     const initAudioEngine = () => {
       if (audioCtx) return;
-      
       try {
         const AudioContext = window.AudioContext || window.webkitAudioContext;
         audioCtx = new AudioContext();
         source = audioCtx.createMediaElementSource(audio);
         source.connect(audioCtx.destination);
-        console.log("Audio Engine: Initialized");
       } catch (e) {
-        console.warn("Audio Engine: Failed to initialize", e);
+        console.error("Audio engine init failed:", e);
       }
     };
 
-    const unmuteAudio = () => {
+    const attemptUnlock = (sourceEvent) => {
       initAudioEngine();
-      
       if (audioCtx && audioCtx.state === 'suspended') {
         audioCtx.resume();
       }
 
+      // Try to play a silent buffer first to "warm up" the hardware
+      const silentBuffer = audioCtx.createBuffer(1, 1, 22050);
+      const node = audioCtx.createBufferSource();
+      node.buffer = silentBuffer;
+      node.connect(audioCtx.destination);
+      node.start(0);
+
       audio.muted = false;
-      audio.volume = 1.0;
-      
-      const playPromise = audio.play();
-      
-      if (playPromise !== undefined) {
-        playPromise.then(() => {
-          console.log("Cinematic Audio: Playing");
-          // Clean up all unlock listeners on success
-          ['click', 'touchstart', 'touchend', 'scroll'].forEach(evt => {
-            window.removeEventListener(evt, unmuteAudio);
-          });
-        }).catch((e) => {
-          console.warn("Cinematic Audio: Playback blocked, waiting for gesture", e);
-          window.audioShouldPlay = true;
+      audio.play().then(() => {
+        window.audioUnlocked = true;
+        // Clean up all unlock listeners
+        ['click', 'touchstart', 'touchend', 'scroll', 'mousedown'].forEach(evt => {
+          window.removeEventListener(evt, attemptUnlock);
         });
-      }
-      
-      video.load(); 
+      }).catch((e) => {
+        // Still blocked
+      });
     };
 
     // Priming the engine on any early interaction
-    ['click', 'touchstart', 'touchend', 'scroll'].forEach(evt => {
-      window.addEventListener(evt, unmuteAudio, { once: true });
+    ['click', 'touchstart', 'touchend', 'scroll', 'mousedown'].forEach(evt => {
+      window.addEventListener(evt, attemptUnlock, { once: true });
     });
 
-    // Auto-prime on load (works in some mobile environments)
-    window.addEventListener('load', () => {
-      initAudioEngine();
-      // Try to play muted first to "warm up" the browser's media pipeline
-      audio.muted = true;
-      audio.play().catch(() => {});
+    const unmuteAudio = () => {
+      if (window.audioUnlocked) return;
+      attemptUnlock('auto-advance');
+    };
+
+    // ── Click/tap to advance early ──
+    gate.addEventListener('click', (e) => {
+      e.stopPropagation();
+      clearTimeout(autoTimer);
+      attemptUnlock('gate-click');
+      advanceToLoader(true);
     }, { once: true });
 
     // Handle background/foreground switching
