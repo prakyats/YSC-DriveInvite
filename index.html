@@ -528,7 +528,7 @@
 <body>
 
   <!-- ── AUDIO ── -->
-  <audio id="intro-audio" src="/assets/d60867a9-140c-455f-b741-7d85e665ac43.mp3" autoplay muted playsinline preload="auto"></audio>
+  <audio id="intro-audio" src="/assets/d60867a9-140c-455f-b741-7d85e665ac43.mp3" preload="auto" crossorigin="anonymous"></audio>
 
   <!-- ── GATE SCREEN ── -->
   <div id="gate">
@@ -701,28 +701,64 @@
     // ── Global interaction unlock (Browser Autoplay Policy) ──
     // This is the most aggressive way to "unlock" audio on mobile.
     // It listens for ANY touch or click to start the audio engine.
-    // ── Cinematic Audio Engine (Interaction Independent) ──
-    window.audioShouldPlay = false;
+    // ── Resilient Cinematic Audio Engine ──
+    let audioCtx = null;
+    let source = null;
 
-    const unmuteAudio = () => {
-      audio.muted = false;
-      audio.volume = 1.0;
-      audio.play().then(() => {
-        console.log("Cinematic Audio: Active");
-        // Success - clean up listeners
-        window.removeEventListener('click', unmuteAudio);
-        window.removeEventListener('touchstart', unmuteAudio);
-        window.removeEventListener('scroll', unmuteAudio);
-      }).catch(() => {
-        console.warn("Cinematic Audio: Waiting for browser permission");
-        window.audioShouldPlay = true;
-      });
+    const initAudioEngine = () => {
+      if (audioCtx) return;
+      
+      try {
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        audioCtx = new AudioContext();
+        source = audioCtx.createMediaElementSource(audio);
+        source.connect(audioCtx.destination);
+        console.log("Audio Engine: Initialized");
+      } catch (e) {
+        console.warn("Audio Engine: Failed to initialize", e);
+      }
     };
 
-    // Resilient Unlockers
-    window.addEventListener('click', unmuteAudio, { once: true });
-    window.addEventListener('touchstart', unmuteAudio, { once: true });
-    window.addEventListener('scroll', unmuteAudio, { once: true });
+    const unmuteAudio = () => {
+      initAudioEngine();
+      
+      if (audioCtx && audioCtx.state === 'suspended') {
+        audioCtx.resume();
+      }
+
+      audio.muted = false;
+      audio.volume = 1.0;
+      
+      const playPromise = audio.play();
+      
+      if (playPromise !== undefined) {
+        playPromise.then(() => {
+          console.log("Cinematic Audio: Playing");
+          // Clean up all unlock listeners on success
+          ['click', 'touchstart', 'touchend', 'scroll'].forEach(evt => {
+            window.removeEventListener(evt, unmuteAudio);
+          });
+        }).catch((e) => {
+          console.warn("Cinematic Audio: Playback blocked, waiting for gesture", e);
+          window.audioShouldPlay = true;
+        });
+      }
+      
+      video.load(); 
+    };
+
+    // Priming the engine on any early interaction
+    ['click', 'touchstart', 'touchend', 'scroll'].forEach(evt => {
+      window.addEventListener(evt, unmuteAudio, { once: true });
+    });
+
+    // Auto-prime on load (works in some mobile environments)
+    window.addEventListener('load', () => {
+      initAudioEngine();
+      // Try to play muted first to "warm up" the browser's media pipeline
+      audio.muted = true;
+      audio.play().catch(() => {});
+    }, { once: true });
 
     // Handle background/foreground switching
     document.addEventListener('visibilitychange', () => {
