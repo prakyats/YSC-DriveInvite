@@ -523,47 +523,12 @@
       flex-shrink: 0;
       margin: 0 1px;
     }
-    #unmute-hint {
-      position: fixed;
-      bottom: 40px;
-      left: 50%;
-      transform: translateX(-50%);
-      color: #D1B06B;
-      font-family: 'Outfit', sans-serif;
-      font-size: 10px;
-      letter-spacing: 3px;
-      text-transform: uppercase;
-      opacity: 0;
-      transition: opacity 1s ease;
-      z-index: 9999;
-      pointer-events: none;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 10px;
-    }
-    #unmute-hint.visible {
-      opacity: 0.8;
-    }
-    .pulse-icon {
-      width: 20px;
-      height: 20px;
-      border: 1px solid #D1B06B;
-      border-radius: 50%;
-      position: relative;
-      animation: pulse-ring 2s infinite;
-    }
-    @keyframes pulse-ring {
-      0% { transform: scale(0.8); opacity: 0.5; }
-      50% { transform: scale(1.2); opacity: 1; }
-      100% { transform: scale(0.8); opacity: 0.5; }
-    }
   </style>
 </head>
 <body>
 
-  <!-- ── AUDIO (Using Video tag for better mobile autoplay unmuting) ── -->
-  <video id="intro-audio" src="/assets/d60867a9-140c-455f-b741-7d85e665ac43.mp3" preload="auto" playsinline loop style="display:none"></video>
+  <!-- ── AUDIO ── -->
+  <audio id="intro-audio" src="/assets/d60867a9-140c-455f-b741-7d85e665ac43.mp3" autoplay muted playsinline preload="auto" crossorigin="anonymous"></audio>
 
   <!-- ── GATE SCREEN ── -->
   <div id="gate">
@@ -586,10 +551,6 @@
       <div class="progress-track">
         <div class="progress-fill"></div>
       </div>
-    </div>
-    <div id="unmute-hint">
-      <div class="pulse-icon"></div>
-      <span>Tap anywhere for sound</span>
     </div>
   </div>
 
@@ -740,52 +701,91 @@
     // ── Global interaction unlock (Browser Autoplay Policy) ──
     // This is the most aggressive way to "unlock" audio on mobile.
     // It listens for ANY touch or click to start the audio engine.
-    // ── Resilient Cinematic Audio Engine ──
-    const unmuteHint = document.getElementById('unmute-hint');
+    // ── Nuclear Cinematic Audio Engine (Production Bypass Attempt) ──
     let audioCtx = null;
-    
+    let source = null;
+    window.audioUnlocked = false;
+
     const initAudioEngine = () => {
       if (audioCtx) return;
       try {
         const AudioContext = window.AudioContext || window.webkitAudioContext;
         audioCtx = new AudioContext();
-        const source = audioCtx.createMediaElementSource(audio);
+        source = audioCtx.createMediaElementSource(audio);
         source.connect(audioCtx.destination);
       } catch (e) {}
     };
 
-    const attemptUnlock = () => {
+    const attemptNuclearUnlock = () => {
       initAudioEngine();
-      if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+      if (audioCtx && audioCtx.state === 'suspended') {
+        audioCtx.resume();
+      }
 
+      // 1. Silent Warm-up
+      try {
+        const node = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        gain.gain.value = 0.001; // Nearly silent but NOT zero
+        node.connect(gain);
+        gain.connect(audioCtx.destination);
+        node.start(0);
+        node.stop(0.1);
+      } catch (e) {}
+
+      // 2. Unmute + Volume Ramp
+      // Some browsers allow unmuting if the volume is very low initially
       audio.muted = false;
+      audio.volume = 0.01; 
+      
       audio.play().then(() => {
-        unmuteHint.classList.remove('visible');
-        ['click', 'touchstart', 'touchend', 'scroll'].forEach(evt => {
-          window.removeEventListener(evt, attemptUnlock);
+        window.audioUnlocked = true;
+        // Fade in
+        let vol = 0.01;
+        const fadeIn = setInterval(() => {
+          vol += 0.05;
+          if (vol >= 1) {
+            audio.volume = 1;
+            clearInterval(fadeIn);
+          } else {
+            audio.volume = vol;
+          }
+        }, 50);
+
+        // Clean up
+        ['click', 'touchstart', 'touchend', 'scroll', 'mousedown', 'mousemove'].forEach(evt => {
+          window.removeEventListener(evt, attemptNuclearUnlock);
         });
       }).catch(() => {
-        // Only show hint if we are past the gate and still blocked
-        if (gate.classList.contains('hide')) {
-          unmuteHint.classList.add('visible');
-        }
+        // Still blocked, will retry on next loop or interaction
       });
     };
 
-    // Global Listeners
-    ['click', 'touchstart', 'touchend', 'scroll'].forEach(evt => {
-      window.addEventListener(evt, attemptUnlock);
+    // PERSISTENT LOOP: Attempt to unmute every 500ms 
+    // This catches the exact millisecond the browser might "unlock" due to any system event
+    const nuclearLoop = setInterval(() => {
+      if (window.audioUnlocked) {
+        clearInterval(nuclearLoop);
+        return;
+      }
+      attemptNuclearUnlock();
+    }, 500);
+
+    // Global interaction listeners (standard backup)
+    ['click', 'touchstart', 'touchend', 'scroll', 'mousedown', 'mousemove'].forEach(evt => {
+      window.addEventListener(evt, attemptNuclearUnlock, { once: true });
     });
 
     const unmuteAudio = () => {
-      attemptUnlock();
+      if (window.audioUnlocked) return;
+      attemptNuclearUnlock();
     };
 
     // ── Click/tap to advance early ──
     gate.addEventListener('click', (e) => {
       e.stopPropagation();
       clearTimeout(autoTimer);
-      attemptUnlock();
+      attemptNuclearUnlock();
       advanceToLoader(true);
     }, { once: true });
 
