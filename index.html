@@ -424,6 +424,34 @@
     }
 
     /* ─────────────────────────────
+       TRAILER VIDEO
+    ───────────────────────────── */
+    #trailer-container {
+      position: fixed;
+      inset: 0;
+      background: #000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 200;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 1.2s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    #trailer-container.visible {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    #trailer-video {
+      width: 100%;
+      height: 100%;
+      object-fit: contain; /* Preserves cinematic aspect ratio on all viewports */
+      background: #000;
+    }
+
+    /* ─────────────────────────────
        TOGGLE PILL
     ───────────────────────────── */
     .toggle-container {
@@ -526,6 +554,16 @@
     </div>
   </div>
 
+  <!-- ── TRAILER SCREEN ── -->
+  <div id="trailer-container">
+    <video 
+      id="trailer-video" 
+      playsinline 
+      preload="auto" 
+      src="/assets/24_compressed.mp4"
+    ></video>
+  </div>
+
   <!-- ── INVITATION VIEW ── -->
   <div id="invitation">
 
@@ -562,6 +600,8 @@
     const gate       = document.getElementById('gate');
     const loader     = document.getElementById('loader');
     const invitation = document.getElementById('invitation');
+    const trailer    = document.getElementById('trailer-container');
+    const video      = document.getElementById('trailer-video');
     const toggleEl   = document.getElementById('toggleContainer');
     const audio      = document.getElementById('intro-audio');
     const barFill    = document.getElementById('gateBarFill');
@@ -574,40 +614,105 @@
     // ── Advance to loader (with or without audio) ──
     function advanceToLoader(withAudio) {
       gate.classList.add('hide');
+      
+      // Start preloading video immediately after interaction
+      video.load();
+
       if (withAudio) {
         audio.play().catch(() => {});
       }
+      
       setTimeout(() => {
         gate.style.display = 'none';
         loader.classList.add('started');
+        
         setTimeout(() => {
+          // Transition: Loader -> Video
           loader.classList.add('fade-out');
+          
           setTimeout(() => {
             loader.style.display = 'none';
-            invitation.classList.add('visible');
-            setTimeout(() => {
-              toggleEl.style.display = '';
-              toggleEl.style.opacity = '0';
-              toggleEl.style.transition = 'opacity 0.6s ease';
-              requestAnimationFrame(() => requestAnimationFrame(() => {
-                toggleEl.style.opacity = '1';
-              }));
-              startLoop();
-            }, 400);
+            trailer.classList.add('visible');
+            
+            // Unmute and play video
+            video.muted = false;
+            video.volume = 1.0;
+            
+            // Fade out intro audio if it's playing to avoid clashing
+            const fadeOutInterval = setInterval(() => {
+              if (audio.volume > 0.1) {
+                audio.volume -= 0.1;
+              } else {
+                audio.pause();
+                clearInterval(fadeOutInterval);
+              }
+            }, 100);
+
+            video.play().catch(err => {
+              console.warn("Autoplay with audio blocked:", err);
+              // Fallback: try playing muted if unmuted fails
+              video.muted = true;
+              video.play().catch(e => advanceToInvitation());
+            });
           }, FADE);
         }, LOADER_DURATION);
       }, 600);
     }
 
+    // ── Video Completion Handler ──
+    video.addEventListener('ended', () => {
+      advanceToInvitation();
+    });
+
+    // ── Transition: Video -> Invitation ──
+    function advanceToInvitation() {
+      trailer.classList.remove('visible');
+      
+      // Resume intro audio for the final invitation view
+      audio.volume = 0;
+      audio.play().catch(() => {});
+      const fadeInInterval = setInterval(() => {
+        if (audio.volume < 0.9) {
+          audio.volume += 0.1;
+        } else {
+          audio.volume = 1.0;
+          clearInterval(fadeInInterval);
+        }
+      }, 100);
+
+      setTimeout(() => {
+        trailer.style.display = 'none';
+        invitation.classList.add('visible');
+        setTimeout(() => {
+          toggleEl.style.display = '';
+          toggleEl.style.opacity = '0';
+          toggleEl.style.transition = 'opacity 0.6s ease';
+          requestAnimationFrame(() => requestAnimationFrame(() => {
+            toggleEl.style.opacity = '1';
+          }));
+          startLoop();
+        }, 400);
+      }, 1200); // Matches transition duration
+    }
+
     // ── Auto-advance after 5 s ──
     const autoTimer = setTimeout(() => {
-      advanceToLoader(false); // no audio — no interaction
+      advanceToLoader(true); // Attempt to play audio even on auto-advance
     }, GATE_DURATION);
 
     // ── Click/tap to advance early ──
     gate.addEventListener('click', () => {
       clearTimeout(autoTimer);
       advanceToLoader(true); // try audio — user interacted
+    }, { once: true });
+
+    // ── Global interaction unlock (Browser Autoplay Policy) ──
+    // This helps unlock audio if the user clicks anywhere else before the gate closes
+    window.addEventListener('click', () => {
+      if (audio.paused && gate.style.display !== 'none') {
+        audio.play().catch(() => {});
+        video.load(); 
+      }
     }, { once: true });
 
     // ── Auto-loop ──
