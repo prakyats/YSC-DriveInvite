@@ -193,8 +193,8 @@
     }
     .gate-cta {
       font-family: 'IBM Plex Mono', monospace;
-      color: rgba(255,255,255,0.5);
-      font-size: clamp(9px, 2.5vw, 11px);
+      color: rgba(255,255,255,0.8); /* Brighter base color */
+      font-size: clamp(11px, 3vw, 13px); /* Slightly larger */
       letter-spacing: 0.6em;
       text-transform: uppercase;
       font-weight: 300;
@@ -206,9 +206,10 @@
       50% { opacity: 1; transform: scale(1.03); filter: drop-shadow(0 0 25px rgba(255,255,255,0.15)); }
     }
     @keyframes cta-pulse {
-      0%, 100% { opacity: 0.35; letter-spacing: 0.6em; }
-      50% { opacity: 0.85; letter-spacing: 0.65em; }
+      0%, 100% { opacity: 0.5; letter-spacing: 0.6em; } /* Brighter min opacity */
+      50% { opacity: 1; letter-spacing: 0.65em; } /* Full brightness peak */
     }
+
     .gate-bar {
       position: absolute;
       bottom: 60px;
