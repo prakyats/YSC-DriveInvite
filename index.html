@@ -265,7 +265,7 @@
       color: rgba(255,255,255,0.35);
       text-transform: uppercase;
       opacity: 0;
-      animation: fadeIn 0.9s ease 0.3s forwards;
+      animation: fadeIn 0.9s ease 0.2s forwards;
       margin-bottom: 16px;
     }
 
@@ -277,7 +277,7 @@
       line-height: 1;
       opacity: 0;
       transform: translateY(14px);
-      animation: titleIn 1s cubic-bezier(0.16, 1, 0.3, 1) 0.6s forwards;
+      animation: titleIn 1s cubic-bezier(0.16, 1, 0.3, 1) 0.4s forwards;
       text-transform: uppercase;
     }
 
@@ -287,7 +287,7 @@
       background: rgba(255,255,255,0.2);
       margin: 20px auto;
       opacity: 0;
-      animation: fadeIn 0.6s ease 1.5s forwards;
+      animation: fadeIn 0.6s ease 0.8s forwards;
     }
 
     #sub-title {
@@ -298,7 +298,7 @@
       color: rgba(255,255,255,0.5);
       text-transform: uppercase;
       opacity: 0;
-      animation: fadeIn 0.9s ease 1.8s forwards;
+      animation: fadeIn 0.9s ease 1.0s forwards;
       margin-bottom: 44px;
     }
 
@@ -317,7 +317,7 @@
       left: 0; top: 0; bottom: 0;
       width: 0%;
       background: linear-gradient(90deg, rgba(255,255,255,0.4), #fff);
-      animation: progressFill 5s cubic-bezier(0.25, 0.1, 0.25, 1) 0.2s forwards;
+      animation: progressFill 3s cubic-bezier(0.25, 0.1, 0.25, 1) 0.2s forwards;
     }
 
     .progress-fill::after {
@@ -541,7 +541,7 @@
   </div>
 
   <script>
-    const LOADER_DURATION = 5000;
+    const LOADER_DURATION = 3000;
     const FADE            = 800;
 
     const gate       = document.getElementById('gate');
@@ -580,6 +580,7 @@
       }
 
       // Unlock & Play Audio
+      audio.currentTime = 0;
       audio.muted = false;
       audio.volume = 1.0;
       audio.play().catch(() => {});
@@ -619,6 +620,7 @@
             video.volume = 1.0;
             
             // Fade out intro audio if it's playing to avoid clashing
+            // (Note: if audio is exactly 7s, it will have just finished)
             const fadeOutInterval = setInterval(() => {
               if (audio.volume > 0.1) {
                 audio.volume -= 0.1;
@@ -635,7 +637,7 @@
             });
           }, FADE);
         }, LOADER_DURATION);
-      }, 1200); // Cinematic transition duration
+      }, 1200); // Cinematic transition duration (1200 + 5000 + 800 = 7000ms = 7s)
     }
 
     video.addEventListener('ended', () => advanceToInvitation());
@@ -643,8 +645,12 @@
     function advanceToInvitation() {
       trailer.classList.remove('visible');
       
+      // Re-trigger cinematic audio from beginning
+      audio.currentTime = 0;
       audio.volume = 0;
+      audio.muted = false;
       audio.play().catch(() => {});
+      
       const fadeInInterval = setInterval(() => {
         if (audio.volume < 0.9) {
           audio.volume += 0.1;
