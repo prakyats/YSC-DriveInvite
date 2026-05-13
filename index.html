@@ -350,16 +350,34 @@
     }
 
     .invite-panel {
-      position: absolute;
-      inset: 0;
-      opacity: 0;
-      transition: opacity 0.6s cubic-bezier(0.4, 0, 0.2, 1);
-      pointer-events: none;
+      width: 100vw;
+      height: 100vh;
+      flex-shrink: 0;
+      position: relative;
     }
 
-    .invite-panel.active {
+    /* ── PANELS CONTAINER ── */
+    #invitation {
+      position: fixed;
+      inset: 0;
+      background: #000;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.9s cubic-bezier(0.4, 0, 0.2, 1);
+      overflow: hidden;
+    }
+
+    #invitation.visible {
       opacity: 1;
       pointer-events: auto;
+    }
+
+    .panels-wrapper {
+      display: flex;
+      width: 200vw;
+      height: 100%;
+      transition: transform 0.8s cubic-bezier(0.23, 1, 0.32, 1);
+      will-change: transform;
     }
 
     /* Full-screen portrait image */
@@ -395,7 +413,7 @@
     #trailer-video {
       width: 100%;
       height: 100%;
-      object-fit: contain; /* Preserves cinematic aspect ratio on all viewports */
+      object-fit: contain;
       background: #000;
     }
 
@@ -410,33 +428,58 @@
       z-index: 300;
       display: flex;
       align-items: center;
-      background: rgba(0, 0, 0, 0.65);
-      border: 1px solid rgba(255, 255, 255, 0.18);
+      background: rgba(0, 0, 0, 0.75);
+      border: 1px solid rgba(255, 255, 255, 0.15);
       border-radius: 100px;
       padding: 3px;
-      backdrop-filter: blur(20px);
-      -webkit-backdrop-filter: blur(20px);
+      backdrop-filter: blur(25px);
+      -webkit-backdrop-filter: blur(25px);
       gap: 2px;
       white-space: nowrap;
+      box-shadow: 0 4px 30px rgba(0, 0, 0, 0.5);
+      animation: toggle-intro 1.2s ease forwards, toggle-float 6s ease-in-out infinite;
+    }
+
+    @keyframes toggle-intro {
+      from { opacity: 0; transform: translateX(-50%) translateY(-10px); }
+      to { opacity: 1; transform: translateX(-50%) translateY(0); }
+    }
+
+    @keyframes toggle-float {
+      0%, 100% { transform: translateX(-50%) translateY(0); }
+      50% { transform: translateX(-50%) translateY(2px); }
+    }
+
+    @keyframes toggle-nudge {
+      0%, 80%, 100% { transform: translateX(-50%); }
+      85% { transform: translateX(-53%); }
+      90% { transform: translateX(-47%); }
+      95% { transform: translateX(-50%); }
+    }
+
+    /* Added periodic nudge to indicate interactivity */
+    .toggle-container.discover {
+      animation: toggle-float 6s ease-in-out infinite, toggle-nudge 10s ease-in-out infinite 5s;
     }
 
     .toggle-btn {
       display: flex;
       align-items: center;
-      gap: 7px;
-      padding: 8px 18px;
+      gap: 8px;
+      padding: 10px 22px;
       background: transparent;
       border: none;
       border-radius: 100px;
-      color: rgba(255, 255, 255, 0.38);
+      color: rgba(255, 255, 255, 0.5); /* Improved inactive visibility */
       font-family: 'IBM Plex Mono', monospace;
       font-weight: 400;
       font-size: clamp(9px, 2.2vw, 11px);
       letter-spacing: 0.22em;
       text-transform: uppercase;
       cursor: pointer;
-      transition: color 0.3s ease, background 0.3s ease;
+      transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
       -webkit-tap-highlight-color: transparent;
+      position: relative;
     }
 
     .toggle-btn .logo-wrap {
@@ -452,13 +495,13 @@
       width: 100%;
       height: 100%;
       object-fit: contain;
-      opacity: 0.35;
-      transition: opacity 0.3s ease;
+      opacity: 0.45; /* Improved inactive visibility */
+      transition: opacity 0.4s ease;
       display: block;
     }
 
     .toggle-btn.active {
-      background: rgba(255, 255, 255, 0.1);
+      background: rgba(255, 255, 255, 0.12);
       color: #fff;
     }
 
@@ -466,10 +509,46 @@
 
     .toggle-divider {
       width: 1px;
-      height: 16px;
-      background: rgba(255, 255, 255, 0.14);
+      height: 18px;
+      background: rgba(255, 255, 255, 0.12);
       flex-shrink: 0;
-      margin: 0 1px;
+      margin: 0 2px;
+    }
+
+    /* ── SWIPE HINT ── */
+    #swipe-hint {
+      position: fixed;
+      bottom: 60px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 300;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 9px;
+      letter-spacing: 0.5em;
+      color: rgba(255,255,255,0.4);
+      text-transform: uppercase;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 1.2s ease;
+    }
+
+    #swipe-hint.visible { opacity: 1; }
+
+    .hint-dot {
+      width: 4px;
+      height: 4px;
+      background: #fff;
+      border-radius: 50%;
+      opacity: 0.4;
+      animation: hint-pulse 2s infinite;
+    }
+
+    @keyframes hint-pulse {
+      0%, 100% { transform: scale(1); opacity: 0.4; }
+      50% { transform: scale(1.5); opacity: 0.8; }
     }
   </style>
 </head>
@@ -528,14 +607,23 @@
       </button>
     </div>
 
-    <!-- Sky City -->
-    <div id="skycity" class="invite-panel active">
-      <img src="assets/aa2bf268-2c90-472a-a183-29501a4b181b.png" alt="Sky City Invitation">
+    <!-- Swipe Hint -->
+    <div id="swipe-hint">
+      <div class="hint-dot"></div>
+      <span>Swipe to Explore</span>
+      <div class="hint-dot"></div>
     </div>
 
-    <!-- Temerario -->
-    <div id="temerario" class="invite-panel">
-      <img src="assets/5f71e533-1a90-433e-ae1c-138119bcd909.png" alt="Temerario Invitation">
+    <div class="panels-wrapper" id="panelsWrapper">
+      <!-- Sky City -->
+      <div id="skycity" class="invite-panel">
+        <img src="assets/aa2bf268-2c90-472a-a183-29501a4b181b.png" alt="Sky City Invitation">
+      </div>
+
+      <!-- Temerario -->
+      <div id="temerario" class="invite-panel">
+        <img src="assets/5f71e533-1a90-433e-ae1c-138119bcd909.png" alt="Temerario Invitation">
+      </div>
     </div>
 
   </div>
@@ -552,6 +640,8 @@
     const toggleEl   = document.getElementById('toggleContainer');
     const audio      = document.getElementById('intro-audio');
     const barFill    = document.getElementById('gateBarFill');
+    const panelsWrapper = document.getElementById('panelsWrapper');
+    const swipeHint  = document.getElementById('swipe-hint');
 
     // ── Pre-Interaction State ──
     requestAnimationFrame(() => {
@@ -584,16 +674,12 @@
       audio.muted = false;
       audio.volume = 1.0;
       
-      // Play and handle promise
       const playPromise = audio.play();
       if (playPromise !== undefined) {
-        playPromise.catch(err => {
-          console.warn("Audio play failed:", err);
-          // Retry on next interaction if needed
-        });
+        playPromise.catch(() => {});
       }
 
-      // Nudge video (muted) to ensure it's unlocked for later
+      // Nudge video (muted) to ensure it's unlocked
       video.muted = true;
       video.play().then(() => video.pause()).catch(() => {});
 
@@ -608,7 +694,6 @@
     function advanceToLoader() {
       if (gate.classList.contains('hide')) return; 
       gate.classList.add('hide');
-      
       video.load();
 
       setTimeout(() => {
@@ -616,26 +701,18 @@
         loader.classList.add('started');
         
         setTimeout(() => {
-          // Transition: Loader -> Video
           loader.classList.add('fade-out');
           
           setTimeout(() => {
             loader.style.display = 'none';
             trailer.classList.add('visible');
             
-            // Unmute and play video
             video.muted = false;
             video.volume = 1.0;
             
-            // Fade out intro audio if it's playing to avoid clashing
-            // (Note: if audio is exactly 7s, it will have just finished)
             const fadeOutInterval = setInterval(() => {
-              if (audio.volume > 0.1) {
-                audio.volume -= 0.1;
-              } else {
-                audio.pause();
-                clearInterval(fadeOutInterval);
-              }
+              if (audio.volume > 0.1) audio.volume -= 0.1;
+              else { audio.pause(); clearInterval(fadeOutInterval); }
             }, 100);
 
             video.play().catch(err => {
@@ -645,7 +722,7 @@
             });
           }, FADE);
         }, LOADER_DURATION);
-      }, 1200); // Cinematic transition duration (1200 + 5000 + 800 = 7000ms = 7s)
+      }, 1200); // Total timing matches 5s audio
     }
 
     video.addEventListener('ended', () => advanceToInvitation());
@@ -653,31 +730,34 @@
     function advanceToInvitation() {
       trailer.classList.remove('visible');
       
-      // Re-trigger cinematic audio from beginning
       audio.currentTime = 0;
       audio.volume = 0;
       audio.muted = false;
       audio.play().catch(() => {});
       
       const fadeInInterval = setInterval(() => {
-        if (audio.volume < 0.9) {
-          audio.volume += 0.1;
-        } else {
-          audio.volume = 1.0;
-          clearInterval(fadeInInterval);
-        }
+        if (audio.volume < 0.9) audio.volume += 0.1;
+        else { audio.volume = 1.0; clearInterval(fadeInInterval); }
       }, 100);
 
       setTimeout(() => {
         trailer.style.display = 'none';
         invitation.classList.add('visible');
+        
         setTimeout(() => {
           toggleEl.style.display = '';
           toggleEl.style.opacity = '0';
           toggleEl.style.transition = 'opacity 0.6s ease';
           requestAnimationFrame(() => requestAnimationFrame(() => {
             toggleEl.style.opacity = '1';
+            // Start subtle discoverability motion after 2s
+            setTimeout(() => toggleEl.classList.add('discover'), 2000);
           }));
+
+          // Show swipe hint briefly on first load
+          swipeHint.classList.add('visible');
+          setTimeout(() => swipeHint.classList.remove('visible'), 4500);
+
           startLoop();
         }, 400);
       }, 1200);
@@ -689,19 +769,21 @@
       }
     });
 
-    // ── Auto-loop Panels ──
+    // ── Navigation & Swipe Engine ──
     const panels = ['skycity', 'temerario'];
     let currentIndex = 0;
     let loopInterval = null;
 
     function switchTo(id) {
       currentIndex = panels.indexOf(id);
+      
+      // Update Toggle State
       document.querySelectorAll('.toggle-btn').forEach(b => {
         b.classList.toggle('active', b.dataset.target === id);
       });
-      document.querySelectorAll('.invite-panel').forEach(p => {
-        p.classList.toggle('active', p.id === id);
-      });
+
+      // Slide Wrapper
+      panelsWrapper.style.transform = `translateX(-${currentIndex * 100}vw)`;
     }
 
     function startLoop() {
