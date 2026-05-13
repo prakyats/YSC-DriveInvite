@@ -558,97 +558,64 @@
       barFill.classList.add('running');
     });
 
-    // ── High-Fidelity Audio Engine (iOS + Android) ──
-    //
-    // Rules that apply to BOTH platforms:
-    //   1. new AudioContext() must be called synchronously inside a tap handler.
-    //   2. audioCtx.resume() must be awaited before source.start() —
-    //      Android Chrome in particular keeps the context 'suspended' even
-    //      after creation inside a gesture until resume() resolves.
-    //   3. decodeAudioData is async; we pre-fetch the ArrayBuffer so the
-    //      decode happens as fast as possible, but we still chain .resume()
-    //      → decode → start so nothing fires out of order.
-    //
-    let rawAudioData  = null;  // ArrayBuffer stored before any tap
-    let audioBuffer   = null;  // decoded AudioBuffer, set after first tap
-    let audioCtx      = null;  // created on first tap
+    // ── High-Fidelity Audio Engine (Mobile Bypass) ──
+    let audioBuffer = null;
+    let audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     let currentSource = null;
 
-    // Pre-fetch raw bytes only — no AudioContext created here.
+    // Pre-fetch and pre-decode cinematic clip
     fetch('assets/d60867a9-140c-455f-b741-7d85e665ac43.mp3')
       .then(r => r.arrayBuffer())
-      .then(data => { rawAudioData = data; })
-      .catch(e => console.warn('Audio prefetch failed:', e));
+      .then(data => audioCtx.decodeAudioData(data))
+      .then(buffer => {
+        audioBuffer = buffer;
+      })
+      .catch(e => console.warn("Audio pre-decode block:", e));
 
-    // Plays from the decoded buffer. Always awaits resume() first so
-    // Android Chrome doesn't silently swallow the start() call.
     function playCinematic(fade = false) {
-      if (!audioCtx || !audioBuffer) return;
-
-      if (currentSource) {
-        try { currentSource.stop(); } catch(_) {}
-        currentSource = null;
+      if (!audioBuffer) {
+        // Fallback to standard audio tag if buffer not ready
+        audio.currentTime = 0;
+        audio.muted = false;
+        audio.volume = 1.0;
+        audio.play().catch(() => {});
+        return;
       }
 
-      const doPlay = () => {
-        const source   = audioCtx.createBufferSource();
-        source.buffer  = audioBuffer;
-        const gainNode = audioCtx.createGain();
-        source.connect(gainNode);
-        gainNode.connect(audioCtx.destination);
-
-        if (fade) {
-          gainNode.gain.setValueAtTime(0, audioCtx.currentTime);
-          gainNode.gain.linearRampToValueAtTime(1, audioCtx.currentTime + 1.0);
-        } else {
-          gainNode.gain.setValueAtTime(1, audioCtx.currentTime);
-        }
-
-        source.start(0);
-        currentSource = source;
-      };
-
-      // resume() is a no-op if already 'running', so safe to always call.
-      // On Android Chrome this is what actually unblocks the audio output.
-      if (audioCtx.state !== 'running') {
-        audioCtx.resume().then(doPlay).catch(doPlay); // doPlay even on error
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+      
+      const source = audioCtx.createBufferSource();
+      source.buffer = audioBuffer;
+      
+      const gainNode = audioCtx.createGain();
+      source.connect(gainNode);
+      gainNode.connect(audioCtx.destination);
+      
+      if (fade) {
+        gainNode.gain.setValueAtTime(0, audioCtx.currentTime);
+        gainNode.gain.linearRampToValueAtTime(1, audioCtx.currentTime + 1.0);
       } else {
-        doPlay();
+        gainNode.gain.setValueAtTime(1, audioCtx.currentTime);
       }
+      
+      source.start(0);
+      currentSource = source;
     }
 
     const startExperience = () => {
       if (gate.classList.contains('hide')) return;
 
-      // Step 1 — create AudioContext synchronously inside the gesture.
-      //   Both iOS and Android require this to happen here, not in a .then().
-      const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-      audioCtx = new AudioContextClass();
+      // ── MANDATORY: SYNCHRONOUS MEDIA UNLOCK ──
+      // This happens instantly to preserve gesture trust.
+      
+      // 1. Play Cinematic (AudioContext Buffer)
+      playCinematic();
 
-      // Step 2 — resume() immediately (Android Chrome often starts suspended).
-      //   We kick this off now so it's in-flight while decoding runs.
-      const resumePromise = audioCtx.resume().catch(() => {});
-
-      // Step 3 — decode the pre-fetched bytes (or re-fetch if somehow missing),
-      //   then wait for resume, then play.
-      const decodePromise = rawAudioData
-        ? audioCtx.decodeAudioData(rawAudioData.slice(0))
-        : fetch('assets/d60867a9-140c-455f-b741-7d85e665ac43.mp3')
-            .then(r => r.arrayBuffer())
-            .then(data => audioCtx.decodeAudioData(data));
-
-      Promise.all([resumePromise, decodePromise])
-        .then(([, buf]) => {
-          audioBuffer = buf;
-          playCinematic();
-        })
-        .catch(e => console.warn('Audio start failed:', e));
-
-      // Nudge video (muted) to unlock it for later autoplay
+      // 2. Video Nudge (Prime for later autoplay)
       video.muted = true;
       video.play().then(() => video.pause()).catch(() => {});
 
-      // Begin Cinematic Progression
+      // ── Begin Cinematic Sequence ──
       advanceToLoader();
     };
 
@@ -678,17 +645,16 @@
             video.muted = false;
             video.volume = 1.0;
             
-            // Fade out Web Audio source if still playing
+            // Fade out intro audio if it's playing
             if (currentSource && audioCtx) {
-              try {
-                const fadeGain = audioCtx.createGain();
-                currentSource.disconnect();
-                currentSource.connect(fadeGain);
-                fadeGain.connect(audioCtx.destination);
-                fadeGain.gain.setValueAtTime(1, audioCtx.currentTime);
-                fadeGain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 1.0);
-                setTimeout(() => { try { currentSource.stop(); } catch(_){} }, 1100);
-              } catch(_) {}
+              const fadeGain = audioCtx.createGain();
+              currentSource.disconnect();
+              currentSource.connect(fadeGain);
+              fadeGain.connect(audioCtx.destination);
+              fadeGain.gain.setValueAtTime(1, audioCtx.currentTime);
+              fadeGain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 1.0);
+              const sourceToStop = currentSource;
+              setTimeout(() => { try { sourceToStop.stop(); } catch(_){} }, 1100);
             }
 
             video.play().catch(err => {
@@ -725,8 +691,12 @@
     }
 
     document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'visible' && audioCtx && audioCtx.state === 'suspended') {
-        audioCtx.resume().catch(() => {});
+      if (document.visibilityState === 'visible') {
+        if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume().catch(() => {});
+        // If the experience has started but video hasn't, resume intro audio
+        if (gate.classList.contains('hide') && trailer.style.display === 'none' && audio.paused) {
+          audio.play().catch(() => {});
+        }
       }
     });
 
