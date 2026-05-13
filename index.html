@@ -528,7 +528,7 @@
 <body>
 
   <!-- ── AUDIO ── -->
-  <audio id="intro-audio" src="/assets/d60867a9-140c-455f-b741-7d85e665ac43.mp3" preload="auto"></audio>
+  <audio id="intro-audio" src="/assets/d60867a9-140c-455f-b741-7d85e665ac43.mp3" autoplay muted playsinline preload="auto"></audio>
 
   <!-- ── GATE SCREEN ── -->
   <div id="gate">
@@ -615,11 +615,15 @@
     function advanceToLoader(withAudio) {
       gate.classList.add('hide');
       
-      // Start preloading video immediately after interaction
+      // Start preloading video immediately
       video.load();
 
       if (withAudio) {
-        audio.play().catch(() => {});
+        // Attempt to unmute and play
+        audio.muted = false;
+        audio.play().catch(() => {
+           console.warn("Audio still blocked by browser policy. Waiting for first interaction.");
+        });
       }
       
       setTimeout(() => {
@@ -699,23 +703,28 @@
     // This is the most aggressive way to "unlock" audio on mobile.
     // It listens for ANY touch or click to start the audio engine.
     const unlockAudio = () => {
-      if (audio.paused && gate.style.display !== 'none') {
-        audio.play().then(() => {
+      // Unmute and play
+      audio.muted = false;
+      audio.play().then(() => {
           console.log("Audio unlocked successfully");
           // Remove listeners once unlocked
           window.removeEventListener('click', unlockAudio);
           window.removeEventListener('touchstart', unlockAudio);
           window.removeEventListener('touchend', unlockAudio);
-        }).catch((e) => {
-          console.warn("Audio unlock failed, waiting for stronger interaction:", e);
-        });
-        video.load(); 
-      }
+          window.removeEventListener('scroll', unlockAudio);
+      }).catch((e) => {
+          // Keep listeners if failed
+      });
+      video.load(); 
     };
 
     window.addEventListener('click', unlockAudio, { once: true });
     window.addEventListener('touchstart', unlockAudio, { once: true });
     window.addEventListener('touchend', unlockAudio, { once: true });
+    window.addEventListener('scroll', unlockAudio, { once: true });
+
+    // Try to play immediately on load (works in some webviews)
+    window.addEventListener('load', unlockAudio, { once: true });
 
     // ── Click/tap to advance early ──
     gate.addEventListener('click', () => {
