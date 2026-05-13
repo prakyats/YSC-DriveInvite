@@ -558,75 +558,79 @@
       barFill.classList.add('running');
     });
 
-    // ── High-Fidelity Audio Engine (Mobile Bypass) ──
+
+    // ── High-Fidelity Audio Engine (Mobile Bulletproof) ──
+    let audioCtx = null;
     let audioBuffer = null;
-    let audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     let currentSource = null;
 
-    // Pre-fetch and pre-decode cinematic clip
-    fetch('assets/d60867a9-140c-455f-b741-7d85e665ac43.mp3')
-      .then(r => r.arrayBuffer())
-      .then(data => audioCtx.decodeAudioData(data))
-      .then(buffer => {
-        audioBuffer = buffer;
-      })
-      .catch(e => console.warn("Audio pre-decode block:", e));
+    // Pre-fetch the audio data immediately
+    const audioUrl = 'assets/d60867a9-140c-455f-b741-7d85e665ac43.mp3';
+    let rawDataPromise = fetch(audioUrl).then(r => r.arrayBuffer()).catch(() => null);
 
-    function playCinematic(fade = false) {
+    async function playCinematic(loop = false, fade = false) {
+      // 1. Synchronously create/resume context on user tap
+      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      if (audioCtx.state === 'suspended') await audioCtx.resume();
+
+      // 2. Stop any existing playback
+      if (currentSource) { try { currentSource.stop(); } catch(e){} }
+
+      // 3. Check if buffer is ready
       if (!audioBuffer) {
-        // Fallback to standard audio tag if buffer not ready
+        const data = await rawDataPromise;
+        if (data) {
+          try {
+            audioBuffer = await audioCtx.decodeAudioData(data.slice(0));
+          } catch(e) { console.warn("Decode failed", e); }
+        }
+      }
+
+      // 4. Play from Buffer (High Fidelity) or Audio Tag (Fallback)
+      if (audioBuffer) {
+        const source = audioCtx.createBufferSource();
+        source.buffer = audioBuffer;
+        source.loop = loop;
+        const gainNode = audioCtx.createGain();
+        source.connect(gainNode);
+        gainNode.connect(audioCtx.destination);
+        if (fade) {
+          gainNode.gain.setValueAtTime(0, audioCtx.currentTime);
+          gainNode.gain.linearRampToValueAtTime(1, audioCtx.currentTime + 1.0);
+        } else {
+          gainNode.gain.setValueAtTime(1, audioCtx.currentTime);
+        }
+        source.start(0);
+        currentSource = source;
+      } else {
+        // Bulletproof Fallback to standard audio tag
+        audio.loop = loop;
         audio.currentTime = 0;
         audio.muted = false;
         audio.volume = 1.0;
-        audio.play().catch(() => {});
-        return;
+        audio.play().catch(e => console.warn("Fallback failed", e));
       }
-
-      if (audioCtx.state === 'suspended') audioCtx.resume();
-      
-      const source = audioCtx.createBufferSource();
-      source.buffer = audioBuffer;
-      
-      const gainNode = audioCtx.createGain();
-      source.connect(gainNode);
-      gainNode.connect(audioCtx.destination);
-      
-      if (fade) {
-        gainNode.gain.setValueAtTime(0, audioCtx.currentTime);
-        gainNode.gain.linearRampToValueAtTime(1, audioCtx.currentTime + 1.0);
-      } else {
-        gainNode.gain.setValueAtTime(1, audioCtx.currentTime);
-      }
-      
-      source.start(0);
-      currentSource = source;
     }
 
     const startExperience = () => {
       if (gate.classList.contains('hide')) return;
 
       // ── MANDATORY: SYNCHRONOUS MEDIA UNLOCK ──
-      // This happens instantly to preserve gesture trust.
-      
-      // 1. Play Cinematic (AudioContext Buffer)
       playCinematic();
 
-      // 2. Video Nudge (Prime for later autoplay)
+      // Video Nudge (Prime for later autoplay)
       video.muted = true;
       video.play().then(() => video.pause()).catch(() => {});
 
-      // ── Begin Cinematic Sequence ──
       advanceToLoader();
     };
 
-    // Full-screen interaction triggers
+    // Full-screen interaction trigger
     gate.addEventListener('click', startExperience, { once: true });
-    gate.addEventListener('touchstart', startExperience, { once: true, passive: true });
 
     function advanceToLoader() {
       if (gate.classList.contains('hide')) return; 
       gate.classList.add('hide');
-      
       video.load();
 
       setTimeout(() => {
@@ -634,18 +638,15 @@
         loader.classList.add('started');
         
         setTimeout(() => {
-          // Transition: Loader -> Video
           loader.classList.add('fade-out');
           
           setTimeout(() => {
             loader.style.display = 'none';
             trailer.classList.add('visible');
-            
-            // Unmute and play video
             video.muted = false;
             video.volume = 1.0;
             
-            // Fade out intro audio if it's playing
+            // Fade out intro audio when video starts
             if (currentSource && audioCtx) {
               const fadeGain = audioCtx.createGain();
               currentSource.disconnect();
@@ -664,7 +665,7 @@
             });
           }, FADE);
         }, LOADER_DURATION);
-      }, 1200); // Cinematic transition duration (1200 + 3000 + 800 = 5000ms = 5s)
+      }, 1200);
     }
 
     video.addEventListener('ended', () => advanceToInvitation());
@@ -672,8 +673,8 @@
     function advanceToInvitation() {
       trailer.classList.remove('visible');
       
-      // Re-trigger cinematic audio with fade-in
-      playCinematic(true);
+      // Re-trigger cinematic audio with fade-in and LOOPING enabled
+      playCinematic(true, true);
 
       setTimeout(() => {
         trailer.style.display = 'none';
@@ -693,10 +694,6 @@
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'visible') {
         if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume().catch(() => {});
-        // If the experience has started but video hasn't, resume intro audio
-        if (gate.classList.contains('hide') && trailer.style.display === 'none' && audio.paused) {
-          audio.play().catch(() => {});
-        }
       }
     });
 
@@ -731,7 +728,5 @@
       });
     });
   </script>
-
-
-
 </body></html>
+
