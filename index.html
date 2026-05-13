@@ -444,7 +444,58 @@
       -webkit-backdrop-filter: blur(20px);
       gap: 2px;
       white-space: nowrap;
+      overflow: visible; /* Allow streak to breathe */
     }
+
+    /* ── Evident Golden Affordance Streak ── */
+    .toggle-container::after {
+      content: '';
+      position: absolute;
+      bottom: -1px;
+      width: 35%;
+      height: 2px; /* Thicker line */
+      background: linear-gradient(90deg, transparent, rgba(212, 175, 55, 1), transparent);
+      filter: blur(1.5px); /* Softer but more evident glow */
+      opacity: 0;
+      pointer-events: none;
+      z-index: 1;
+    }
+
+    /* Sweep toward Temerario if Sky City is active */
+    .toggle-container:has(.toggle-btn[data-target="skycity"].active)::after {
+      left: 50%;
+      animation: luxe-streak-right 4s infinite ease-in-out; /* Faster frequency */
+    }
+
+    /* Sweep toward Sky City if Temerario is active */
+    .toggle-container:has(.toggle-btn[data-target="temerario"].active)::after {
+      right: 50%;
+      animation: luxe-streak-left 4s infinite ease-in-out; /* Faster frequency */
+    }
+
+    @keyframes luxe-streak-right {
+      0% { transform: translateX(-30px); opacity: 0; }
+      50% { opacity: 0.9; }
+      100% { transform: translateX(50px); opacity: 0; }
+    }
+
+    @keyframes luxe-streak-left {
+      0% { transform: translateX(30px); opacity: 0; }
+      50% { opacity: 0.9; }
+      100% { transform: translateX(-50px); opacity: 0; }
+    }
+
+    /* Ambient pulse on inactive logo */
+    .toggle-btn:not(.active) .logo-wrap img {
+      animation: icon-hint 4s infinite ease-in-out;
+    }
+
+    @keyframes icon-hint {
+      0%, 100% { filter: drop-shadow(0 0 0 transparent); opacity: 0.35; }
+      50% { filter: drop-shadow(0 0 5px rgba(212, 175, 55, 0.6)); opacity: 0.8; }
+    }
+
+
 
     .toggle-btn {
       display: flex;
