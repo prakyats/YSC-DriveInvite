@@ -523,12 +523,47 @@
       flex-shrink: 0;
       margin: 0 1px;
     }
+    #unmute-hint {
+      position: fixed;
+      bottom: 40px;
+      left: 50%;
+      transform: translateX(-50%);
+      color: #D1B06B;
+      font-family: 'Outfit', sans-serif;
+      font-size: 10px;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      opacity: 0;
+      transition: opacity 1s ease;
+      z-index: 9999;
+      pointer-events: none;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+    }
+    #unmute-hint.visible {
+      opacity: 0.8;
+    }
+    .pulse-icon {
+      width: 20px;
+      height: 20px;
+      border: 1px solid #D1B06B;
+      border-radius: 50%;
+      position: relative;
+      animation: pulse-ring 2s infinite;
+    }
+    @keyframes pulse-ring {
+      0% { transform: scale(0.8); opacity: 0.5; }
+      50% { transform: scale(1.2); opacity: 1; }
+      100% { transform: scale(0.8); opacity: 0.5; }
+    }
   </style>
 </head>
 <body>
 
-  <!-- ── AUDIO ── -->
-  <audio id="intro-audio" src="/assets/d60867a9-140c-455f-b741-7d85e665ac43.mp3" preload="auto" crossorigin="anonymous"></audio>
+  <!-- ── AUDIO (Using Video tag for better mobile autoplay unmuting) ── -->
+  <video id="intro-audio" src="/assets/d60867a9-140c-455f-b741-7d85e665ac43.mp3" preload="auto" playsinline loop style="display:none"></video>
 
   <!-- ── GATE SCREEN ── -->
   <div id="gate">
@@ -551,6 +586,10 @@
       <div class="progress-track">
         <div class="progress-fill"></div>
       </div>
+    </div>
+    <div id="unmute-hint">
+      <div class="pulse-icon"></div>
+      <span>Tap anywhere for sound</span>
     </div>
   </div>
 
@@ -702,62 +741,51 @@
     // This is the most aggressive way to "unlock" audio on mobile.
     // It listens for ANY touch or click to start the audio engine.
     // ── Resilient Cinematic Audio Engine ──
+    const unmuteHint = document.getElementById('unmute-hint');
     let audioCtx = null;
-    let source = null;
-    window.audioUnlocked = false;
-
+    
     const initAudioEngine = () => {
       if (audioCtx) return;
       try {
         const AudioContext = window.AudioContext || window.webkitAudioContext;
         audioCtx = new AudioContext();
-        source = audioCtx.createMediaElementSource(audio);
+        const source = audioCtx.createMediaElementSource(audio);
         source.connect(audioCtx.destination);
-      } catch (e) {
-        console.error("Audio engine init failed:", e);
-      }
+      } catch (e) {}
     };
 
-    const attemptUnlock = (sourceEvent) => {
+    const attemptUnlock = () => {
       initAudioEngine();
-      if (audioCtx && audioCtx.state === 'suspended') {
-        audioCtx.resume();
-      }
-
-      // Try to play a silent buffer first to "warm up" the hardware
-      const silentBuffer = audioCtx.createBuffer(1, 1, 22050);
-      const node = audioCtx.createBufferSource();
-      node.buffer = silentBuffer;
-      node.connect(audioCtx.destination);
-      node.start(0);
+      if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
 
       audio.muted = false;
       audio.play().then(() => {
-        window.audioUnlocked = true;
-        // Clean up all unlock listeners
-        ['click', 'touchstart', 'touchend', 'scroll', 'mousedown'].forEach(evt => {
+        unmuteHint.classList.remove('visible');
+        ['click', 'touchstart', 'touchend', 'scroll'].forEach(evt => {
           window.removeEventListener(evt, attemptUnlock);
         });
-      }).catch((e) => {
-        // Still blocked
+      }).catch(() => {
+        // Only show hint if we are past the gate and still blocked
+        if (gate.classList.contains('hide')) {
+          unmuteHint.classList.add('visible');
+        }
       });
     };
 
-    // Priming the engine on any early interaction
-    ['click', 'touchstart', 'touchend', 'scroll', 'mousedown'].forEach(evt => {
-      window.addEventListener(evt, attemptUnlock, { once: true });
+    // Global Listeners
+    ['click', 'touchstart', 'touchend', 'scroll'].forEach(evt => {
+      window.addEventListener(evt, attemptUnlock);
     });
 
     const unmuteAudio = () => {
-      if (window.audioUnlocked) return;
-      attemptUnlock('auto-advance');
+      attemptUnlock();
     };
 
     // ── Click/tap to advance early ──
     gate.addEventListener('click', (e) => {
       e.stopPropagation();
       clearTimeout(autoTimer);
-      attemptUnlock('gate-click');
+      attemptUnlock();
       advanceToLoader(true);
     }, { once: true });
 
