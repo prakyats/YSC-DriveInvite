@@ -673,8 +673,8 @@
     function advanceToInvitation() {
       trailer.classList.remove('visible');
       
-      // Re-trigger cinematic audio with fade-in and LOOPING enabled
-      playCinematic(true, true);
+      // Re-trigger cinematic audio with fade-in and looping DISABLED
+      playCinematic(false, true);
 
       setTimeout(() => {
         trailer.style.display = 'none';
