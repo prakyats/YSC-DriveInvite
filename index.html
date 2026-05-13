@@ -558,40 +558,60 @@
       barFill.classList.add('running');
     });
 
-    // ── Cinematic Engine ──
+    // ── High-Fidelity Audio Engine (Mobile Bypass) ──
+    let audioBuffer = null;
     let audioCtx = null;
-    let source = null;
+    let currentSource = null;
+
+    // Pre-fetch cinematic clip
+    fetch('assets/d60867a9-140c-455f-b741-7d85e665ac43.mp3')
+      .then(r => r.arrayBuffer())
+      .then(data => {
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        audioCtx = new AudioContext();
+        return audioCtx.decodeAudioData(data);
+      })
+      .then(buffer => {
+        audioBuffer = buffer;
+      })
+      .catch(e => console.warn("Audio load block:", e));
+
+    function playCinematic(fade = false) {
+      if (!audioBuffer || !audioCtx) {
+        // Fallback to basic audio element if buffer not ready
+        audio.currentTime = 0;
+        audio.muted = false;
+        audio.volume = 1.0;
+        audio.play().catch(() => {});
+        return;
+      }
+
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+      
+      const source = audioCtx.createBufferSource();
+      source.buffer = audioBuffer;
+      
+      const gainNode = audioCtx.createGain();
+      source.connect(gainNode);
+      gainNode.connect(audioCtx.destination);
+      
+      if (fade) {
+        gainNode.gain.setValueAtTime(0, audioCtx.currentTime);
+        gainNode.gain.linearRampToValueAtTime(1, audioCtx.currentTime + 1.0);
+      } else {
+        gainNode.gain.setValueAtTime(1, audioCtx.currentTime);
+      }
+      
+      source.start(0);
+      currentSource = source;
+      return gainNode;
+    }
 
     const startExperience = () => {
       if (gate.classList.contains('hide')) return;
       
-      // Initialize Audio Context (Standard Bypass)
-      if (!audioCtx) {
-        try {
-          const AudioContext = window.AudioContext || window.webkitAudioContext;
-          audioCtx = new AudioContext();
-          source = audioCtx.createMediaElementSource(audio);
-          source.connect(audioCtx.destination);
-        } catch (e) {}
-      }
-      
-      if (audioCtx && audioCtx.state === 'suspended') {
-        audioCtx.resume();
-      }
-
-      // Unlock & Play Audio
-      audio.currentTime = 0;
-      audio.muted = false;
-      audio.volume = 1.0;
-      
-      // Play and handle promise
-      const playPromise = audio.play();
-      if (playPromise !== undefined) {
-        playPromise.catch(err => {
-          console.warn("Audio play failed:", err);
-          // Retry on next interaction if needed
-        });
-      }
+      // Play cinematic audio (Bypass silence switch)
+      playCinematic();
 
       // Nudge video (muted) to ensure it's unlocked for later
       video.muted = true;
@@ -653,20 +673,8 @@
     function advanceToInvitation() {
       trailer.classList.remove('visible');
       
-      // Re-trigger cinematic audio from beginning
-      audio.currentTime = 0;
-      audio.volume = 0;
-      audio.muted = false;
-      audio.play().catch(() => {});
-      
-      const fadeInInterval = setInterval(() => {
-        if (audio.volume < 0.9) {
-          audio.volume += 0.1;
-        } else {
-          audio.volume = 1.0;
-          clearInterval(fadeInInterval);
-        }
-      }, 100);
+      // Re-trigger cinematic audio with fade-in
+      playCinematic(true);
 
       setTimeout(() => {
         trailer.style.display = 'none';
